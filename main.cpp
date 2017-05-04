@@ -1,14 +1,25 @@
+// g++ --std=c++11 main.cpp -o main -lutil -L/usr/local/lib -lboost_iostreams -lboost_system -lboost_filesystem
+
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <random>
 #include <algorithm> 
 #include <math.h>
+#include <limits>
+#include <cmath>
+#include <cstdio>
+#include <boost/tuple/tuple.hpp>
+#include <boost/foreach.hpp>
+
+// Warn about use of deprecated functions.
+#define GNUPLOT_DEPRECATE_WARN
+#include "gnuplot-iostream.h"
 
 using namespace std;
 
 #define EXP 2.7182
-#define TEMPERATURE 20
+#define TEMPERATURE 10
 
 random_device rd;
 mt19937 gen(rd());
@@ -75,7 +86,10 @@ public:
 		uniform_int_distribution<> * tableDistribution;
 		string guestsFile;
 		vector<int> * tables;
-
+		vector<pair<double, double> > plotDataA;
+		vector<pair<double, double> > plotDataB;
+		vector<pair<double, double> > plotDataAverage;
+		int iterationCounter;
 
 	public:
 		WeddingSeats(string guestsFile, int numberOfTables, int numberOfSeatsPerTable)
@@ -84,6 +98,7 @@ public:
 			this->numberOfTables = numberOfTables;
 			this->numberOfSeatsPerTable = numberOfSeatsPerTable;
 			this->guestsFile = guestsFile;
+			this->iterationCounter = 0;
 
 			if(loadGuests())
 			{
@@ -95,7 +110,7 @@ public:
 			generateMutationValues();
 			printPopulation();
 
-			int i = 100;
+			int i = 1000;
 			int indexTableReproduction;
 			while(--i)
 			{
@@ -104,6 +119,8 @@ public:
 				mutate(!indexTableReproduction);
 				printPopulation();			
 			}
+			printChart();
+			printChartAverage();
 		}
 
 		~WeddingSeats()
@@ -120,12 +137,37 @@ public:
 				mutationValues.push_back(i);
 				mutationValues.push_back(i);
 
-				mutationWeights.push_back(1.0/(numberOfSeatsPerTable-i+2));
+				mutationWeights.push_back(1.0/(numberOfSeatsPerTable-i+3));
 				mutationWeights.push_back(0);
 			}
 			mutationWeights.pop_back();
 
 			tableDistribution = new uniform_int_distribution<>(0, numberOfTables-1);
+		}
+
+		void printChart()
+		{
+			Gnuplot gp;
+
+			gp << "set title \n";
+			gp << "set ylabel 'values'\n";
+			gp << "set xlabel 'iterations'\n";
+			gp << "plot '-' with lines title 'chromosome1' , '-' with lines title 'chromosome 2'\n";
+			gp.send1d(plotDataA);
+			gp.send1d(plotDataB);
+
+		}
+
+		void printChartAverage()
+		{
+			Gnuplot gp;
+
+			gp << "set title \n";
+			gp << "set ylabel 'values'\n";
+			gp << "set xlabel 'iterations'\n";
+			gp << "plot '-' with lines title 'average'\n";
+			gp.send1d(plotDataAverage);			
+
 		}
 
 		void printPopulation()
@@ -197,14 +239,18 @@ public:
 					valueTableA = distancesA[j];
 					valueTableB = distancesB[j];
 				}
-			}
+			}			
 
 			valueTableA = sqrt(valueTableA);
 			valueTableB = sqrt(valueTableB);
 
+			plotDataA.push_back(make_pair(iterationCounter, valueTableA));
+			plotDataB.push_back(make_pair(iterationCounter, valueTableB));
+			plotDataAverage.push_back(make_pair(iterationCounter++, (valueTableB+valueTableA)/2));
+
 			sum = pow(EXP, valueTableA/TEMPERATURE) + pow(EXP, valueTableB/TEMPERATURE);
 			vector<int> values = { 0,0,1,1 };
-			vector<float> weights =  {  pow(EXP, valueTableA/TEMPERATURE)/sum,  0, pow(EXP, valueTableB/TEMPERATURE)/sum};
+			vector<float> weights =  {  pow(EXP, 1.0*valueTableA/TEMPERATURE)/sum,  0, pow(EXP, 1.0*valueTableB/TEMPERATURE)/sum};
 
 			piecewise_constant_distribution<> d(values.begin(), values.end(), weights.begin());
 
